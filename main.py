@@ -14,6 +14,7 @@ import image_utils as pdf_utils
 # Завантаження змінних
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
+WEBSITE = os.getenv("WEBSITE")
 
 if not TOKEN:
     raise ValueError("BOT_TOKEN не встановлено! Перевірте змінні середовища.")
@@ -91,7 +92,7 @@ async def cmd_start(message: types.Message):
     if message.from_user.id not in users_with_pinned_msg:
         try:
                     sent_msg = await message.answer(
-                        "НЕ ПРАЦЮЄ? ПЕРЕЙДИ ЗА ПОСИЛАННЯМ - https://1234.com", 
+                        f"НЕ ПРАЦЮЄ? ПЕРЕЙДИ ЗА ПОСИЛАННЯМ - {WEBSITE}", 
                         disable_web_page_preview=True
                     )
                     
@@ -209,6 +210,9 @@ async def main():
     except Exception as e:
         logging.error(f"Помилка при запуску бота: {e}", exc_info=True)
         raise
+
+# Експортуємо для використання в web_server.py
+__all__ = ['bot', 'dp', 'main']
 
 if __name__ == "__main__":
     try:

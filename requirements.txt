@@ -4,3 +4,4 @@ qrcode[pil]>=7.4.2
 pymupdf>=1.26.0
 pillow>=10.2.0
 pypdf>=4.0.0
+flask>=3.0.0
