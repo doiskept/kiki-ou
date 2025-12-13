@@ -50,7 +50,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Bot - Квитки</title>
+    <title>1</title>
     <style>
         * {
             margin: 0;
@@ -127,14 +127,6 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container">
-        <h1>🎫 Telegram Bot</h1>
-        <div class="status active">● Активний</div>
-        <p>Бот для створення квитків працює у фоновому режимі.</p>
-        <p>Використовуйте Telegram для взаємодії з ботом.</p>
-        <a href="https://t.me/{{ bot_username }}" class="bot-link" target="_blank">
-            Відкрити бота в Telegram
-        </a>
-        <div class="footer">
             <p>Сервер працює на Render</p>
         </div>
     </div>
@@ -353,3 +345,4 @@ if __name__ == "__main__":
     except Exception as e:
         logging.error(f"Критична помилка: {e}", exc_info=True)
         raise
+
