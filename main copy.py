@@ -1,8 +1,6 @@
 import asyncio
 import os
 import logging
-import threading
-from flask import Flask, render_template_string
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -39,124 +37,6 @@ logging.basicConfig(
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
-
-# --- WEB SERVER (FLASK) ---
-app = Flask(__name__)
-
-# HTML шаблон для головної сторінки
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="uk">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Bot - Квитки</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 500px;
-            width: 100%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            text-align: center;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 2em;
-        }
-        .status {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: 600;
-            margin: 20px 0;
-        }
-        .status.active {
-            background: #10b981;
-            color: white;
-        }
-        .status.inactive {
-            background: #ef4444;
-            color: white;
-        }
-        p {
-            color: #666;
-            line-height: 1.6;
-            margin: 15px 0;
-        }
-        .bot-link {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 12px 24px;
-            background: #667eea;
-            color: white;
-            text-decoration: none;
-            border-radius: 10px;
-            font-weight: 600;
-            transition: transform 0.2s;
-        }
-        .bot-link:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-            color: #999;
-            font-size: 0.85em;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        
-        <p>1</p>
-       
-        </div>
-    </div>
-</body>
-</html>
-"""
-
-@app.route('/')
-def index():
-    """Головна сторінка"""
-    # Отримуємо username бота з токену або змінної середовища
-    bot_username = os.getenv('BOT_USERNAME', 'your_bot')
-    return render_template_string(HTML_TEMPLATE.format(bot_username=bot_username))
-
-@app.route('/health')
-def health():
-    """Health check endpoint для Render"""
-    return {'status': 'ok', 'bot': 'running'}, 200
-
-@app.route('/ping')
-def ping():
-    """Ping endpoint для підтримки активності"""
-    return {'status': 'pong'}, 200
-
-def run_flask():
-    """Запуск Flask сервера"""
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
 
 # --- ПАМ'ЯТЬ ДЛЯ PINNED MESSAGE (Тимчасова, в оперативці) ---
 # Зберігає ID користувачів, які вже отримали закріплене повідомлення.
@@ -336,11 +216,6 @@ __all__ = ['bot', 'dp', 'main']
 
 if __name__ == "__main__":
     try:
-        # Запускаємо веб-сервер у окремому потоці
-        flask_thread = threading.Thread(target=run_flask, daemon=True)
-        flask_thread.start()
-        logging.info("Веб-сервер запущено у фоновому режимі")
-
         asyncio.run(main())
     except KeyboardInterrupt:
         logging.info("Бот зупинено користувачем")
