@@ -127,9 +127,15 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container">
-        
-        <p>1</p>
-       
+        <h1>🎫 Telegram Bot</h1>
+        <div class="status active">● Активний</div>
+        <p>Бот для створення квитків працює у фоновому режимі.</p>
+        <p>Використовуйте Telegram для взаємодії з ботом.</p>
+        <a href="https://t.me/{{ bot_username }}" class="bot-link" target="_blank">
+            Відкрити бота в Telegram
+        </a>
+        <div class="footer">
+            <p>Сервер працює на Render</p>
         </div>
     </div>
 </body>
@@ -141,7 +147,7 @@ def index():
     """Головна сторінка"""
     # Отримуємо username бота з токену або змінної середовища
     bot_username = os.getenv('BOT_USERNAME', 'your_bot')
-    return render_template_string(HTML_TEMPLATE.format(bot_username=bot_username))
+    return render_template_string(HTML_TEMPLATE, bot_username=bot_username)
 
 @app.route('/health')
 def health():
