@@ -116,15 +116,6 @@ def edit_ticket_pdf(data):
     if not os.path.exists(template_path):
         return None, f"Помилка: Не знайдено файл {template_path}"
 
-    # Відкриваємо зображення з явним закриттям
-    img = None
-    page2 = None
-    qr_img = None
-    try:
-        img = Image.open(template_path).convert("RGB")
-        draw = ImageDraw.Draw(img)
-        width, height = img.size
-    
     # --- ШРИФТИ (з кешуванням) ---
     def get_font(size):
         cache_key = f"browab_{size}"
@@ -140,36 +131,45 @@ def edit_ticket_pdf(data):
     font_ticket_num = get_font(260)
     font_disclaimer = get_font(100)
 
-    target_orange = hex_to_rgb("#fd9a0c") 
-    black_color = (0, 0, 0)
+    # Відкриваємо зображення з явним закриттям
+    img = None
+    page2 = None
+    qr_img = None
+    try:
+        img = Image.open(template_path).convert("RGB")
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
 
-    base_qr_x = 2258
-    base_qr_y = 6326
+        target_orange = hex_to_rgb("#fd9a0c") 
+        black_color = (0, 0, 0)
 
-    # QR position
-    if not is_standing:
-        pos_qr = (base_qr_x, base_qr_y + 400)
-    else:
-        pos_qr = (base_qr_x, base_qr_y)
+        base_qr_x = 2258
+        base_qr_y = 6326
 
-    # --- МАЛЮВАННЯ ТЕКСТУ ---
-    if is_standing:
-        pos_section_stand = (697, 5780)
-        pos_price_stand = (4729, 5768)
-        draw_text_with_bg(draw, pos_section_stand, str(data['section']), font_section, target_orange)
-        draw_text_with_bg(draw, pos_price_stand, str(data['price']), font_data, target_orange)
-    else:
-        pos_row = (697, 5524)
-        pos_seat = (4729, 5524)
-        pos_section_seat = (697, 6200)
-        pos_price_seat = (4729, 6188)
+        # QR position
+        if not is_standing:
+            pos_qr = (base_qr_x, base_qr_y + 400)
+        else:
+            pos_qr = (base_qr_x, base_qr_y)
 
-        row_text = str(data['row']) if data['row'] else "-"
-        draw_text_with_bg(draw, pos_row, row_text, font_data, target_orange)
-        seat_text = str(data['seat']) if data['seat'] else "-"
-        draw_text_with_bg(draw, pos_seat, seat_text, font_data, target_orange)
-        draw_text_with_bg(draw, pos_section_seat, str(data['section']), font_section, target_orange)
-        draw_text_with_bg(draw, pos_price_seat, str(data['price']), font_data, target_orange)
+        # --- МАЛЮВАННЯ ТЕКСТУ ---
+        if is_standing:
+            pos_section_stand = (697, 5780)
+            pos_price_stand = (4729, 5768)
+            draw_text_with_bg(draw, pos_section_stand, str(data['section']), font_section, target_orange)
+            draw_text_with_bg(draw, pos_price_stand, str(data['price']), font_data, target_orange)
+        else:
+            pos_row = (697, 5524)
+            pos_seat = (4729, 5524)
+            pos_section_seat = (697, 6200)
+            pos_price_seat = (4729, 6188)
+
+            row_text = str(data['row']) if data['row'] else "-"
+            draw_text_with_bg(draw, pos_row, row_text, font_data, target_orange)
+            seat_text = str(data['seat']) if data['seat'] else "-"
+            draw_text_with_bg(draw, pos_seat, seat_text, font_data, target_orange)
+            draw_text_with_bg(draw, pos_section_seat, str(data['section']), font_section, target_orange)
+            draw_text_with_bg(draw, pos_price_seat, str(data['price']), font_data, target_orange)
 
         # --- QR КОД (без крапок) ---
         qr_data = ticket_number.replace(".", "")
@@ -185,24 +185,24 @@ def edit_ticket_pdf(data):
         del qr_img
         gc.collect()
 
-    # --- РОЗРАХУНОК РОЗМІЩЕННЯ (для переносу на стор. 2) ---
-    qr_center_x = pos_qr[0] + (qr_size // 2)
-    bbox_num = draw.textbbox((0, 0), ticket_number, font=font_ticket_num)
-    num_w = bbox_num[2] - bbox_num[0]
-    num_h = bbox_num[3] - bbox_num[1]
-    
-    text_num_x_page1 = qr_center_x - (num_w // 2)
-    text_num_y_page1 = pos_qr[1] + qr_size + 60
-    
-    num_bottom_limit = text_num_y_page1 + num_h
-    text_disc_y_page1 = num_bottom_limit + 150 
-    
-    if hasattr(draw, "multiline_textbbox"):
-        bbox_disc = draw.multiline_textbbox((qr_center_x, text_disc_y_page1), disclaimer_text, font=font_disclaimer, anchor="ma", align="center")
-        disc_bottom_limit = bbox_disc[3]
-    else:
-        lines = disclaimer_text.count('\n') + 1
-        disc_bottom_limit = text_disc_y_page1 + (lines * 120)
+        # --- РОЗРАХУНОК РОЗМІЩЕННЯ (для переносу на стор. 2) ---
+        qr_center_x = pos_qr[0] + (qr_size // 2)
+        bbox_num = draw.textbbox((0, 0), ticket_number, font=font_ticket_num)
+        num_w = bbox_num[2] - bbox_num[0]
+        num_h = bbox_num[3] - bbox_num[1]
+        
+        text_num_x_page1 = qr_center_x - (num_w // 2)
+        text_num_y_page1 = pos_qr[1] + qr_size + 60
+        
+        num_bottom_limit = text_num_y_page1 + num_h
+        text_disc_y_page1 = num_bottom_limit + 150 
+        
+        if hasattr(draw, "multiline_textbbox"):
+            bbox_disc = draw.multiline_textbbox((qr_center_x, text_disc_y_page1), disclaimer_text, font=font_disclaimer, anchor="ma", align="center")
+            disc_bottom_limit = bbox_disc[3]
+        else:
+            lines = disclaimer_text.count('\n') + 1
+            disc_bottom_limit = text_disc_y_page1 + (lines * 120)
 
         # --- OVERFLOW CHECK ---
         pages = [img]
