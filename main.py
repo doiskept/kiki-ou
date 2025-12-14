@@ -225,6 +225,39 @@ async def delete_file_after_delay(file_path: str, delay: int = 5):
     except Exception as e:
         logging.error(f"Помилка при видаленні файлу {file_path}: {e}")
 
+def cleanup_old_files(output_dir: str = "output", max_files: int = 10):
+    """
+    Видаляє старі файли з папки output, якщо їх більше ніж max_files.
+    Залишає тільки останні max_files файлів.
+    
+    Args:
+        output_dir: Папка з файлами
+        max_files: Максимальна кількість файлів для збереження
+    """
+    try:
+        if not os.path.exists(output_dir):
+            return
+        
+        files = [f for f in os.listdir(output_dir) if f.endswith('.pdf')]
+        if len(files) <= max_files:
+            return
+        
+        # Сортуємо файли за часом модифікації (старі спочатку)
+        files_with_time = [(f, os.path.getmtime(os.path.join(output_dir, f))) for f in files]
+        files_with_time.sort(key=lambda x: x[1])
+        
+        # Видаляємо старі файли
+        files_to_delete = files_with_time[:-max_files]
+        for file_name, _ in files_to_delete:
+            file_path = os.path.join(output_dir, file_name)
+            try:
+                os.remove(file_path)
+                logging.info(f"Старий файл видалено: {file_path}")
+            except Exception as e:
+                logging.error(f"Помилка при видаленні старого файлу {file_path}: {e}")
+    except Exception as e:
+        logging.error(f"Помилка при очищенні старих файлів: {e}")
+
 # --- ХЕНДЛЕРИ ---
 
 @dp.message(Command("start"))
@@ -307,6 +340,9 @@ async def confirm_creation(message: types.Message, state: FSMContext):
     
     # Виклик генератора
     try:
+        # Очищаємо старі файли перед створенням нового
+        cleanup_old_files(max_files=5)
+        
         # Припускаємо, що pdf_utils.edit_ticket_pdf повертає (шлях, номер)
         pdf_path, ticket_num = pdf_utils.edit_ticket_pdf(data)
         

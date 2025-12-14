@@ -2,7 +2,11 @@ from PIL import Image, ImageDraw, ImageFont
 import qrcode
 import os
 import random
-from pypdf import PdfReader, PdfWriter 
+import gc
+from pypdf import PdfReader, PdfWriter
+
+# Кеш для шрифтів (щоб не завантажувати їх кожного разу)
+_font_cache = {} 
 
 def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
@@ -31,54 +35,62 @@ def draw_text_with_bg(draw, xy, text, font, text_color, bg_color=(255, 255, 255)
 
 # --- ФУНКЦІЯ ДЛЯ СТВОРЕННЯ МЕТАДАНИХ (BOOKMARKS) ---
 def add_bookmarks(pdf_path, data, ticket_number):
-    reader = PdfReader(pdf_path)
-    writer = PdfWriter()
+    reader = None
+    try:
+        reader = PdfReader(pdf_path)
+        writer = PdfWriter()
 
-    for page in reader.pages:
-        writer.add_page(page)
+        for page in reader.pages:
+            writer.add_page(page)
 
-    # --- ЛОГІКА ВИЗНАЧЕННЯ STANDING ---
-    section_name = str(data.get('section', '')).lower()
-    is_standing_zone = 'dance' in section_name or 'fan' in section_name
+        # --- ЛОГІКА ВИЗНАЧЕННЯ STANDING ---
+        section_name = str(data.get('section', '')).lower()
+        is_standing_zone = 'dance' in section_name or 'fan' in section_name
 
-    # 1. Корінь
-    root = writer.add_outline_item("MAX KORZH", 0)
+        # 1. Корінь
+        root = writer.add_outline_item("MAX KORZH", 0)
 
-    # 2. Статичні дані
-    writer.add_outline_item("23 May 2026, 18:00", 0, parent=root)
-    writer.add_outline_item("NATIONAL ARENA BUCHAREST", 0, parent=root)
-    writer.add_outline_item("BULEVARDUL BASARABIA 37-39, BUCUREȘTI, BUCHAREST, ROMANIA", 0, parent=root)
+        # 2. Статичні дані
+        writer.add_outline_item("23 May 2026, 18:00", 0, parent=root)
+        writer.add_outline_item("NATIONAL ARENA BUCHAREST", 0, parent=root)
+        writer.add_outline_item("BULEVARDUL BASARABIA 37-39, BUCUREȘTI, BUCHAREST, ROMANIA", 0, parent=root)
 
-    # 3. ROW (ТІЛЬКИ якщо це НЕ dance/fan)
-    if not is_standing_zone:
-        row_val = str(data.get('row', '-'))
-        row_parent = writer.add_outline_item("ROW", 0, parent=root)
-        writer.add_outline_item(row_val, 0, parent=row_parent)
+        # 3. ROW (ТІЛЬКИ якщо це НЕ dance/fan)
+        if not is_standing_zone:
+            row_val = str(data.get('row', '-'))
+            row_parent = writer.add_outline_item("ROW", 0, parent=root)
+            writer.add_outline_item(row_val, 0, parent=row_parent)
 
-    # 4. SECTION: (Завжди)
-    sec_val = str(data.get('section', '-'))
-    sec_parent = writer.add_outline_item("SECTION:", 0, parent=root)
-    writer.add_outline_item(sec_val, 0, parent=sec_parent)
+        # 4. SECTION: (Завжди)
+        sec_val = str(data.get('section', '-'))
+        sec_parent = writer.add_outline_item("SECTION:", 0, parent=root)
+        writer.add_outline_item(sec_val, 0, parent=sec_parent)
 
-    # 5. SEAT (ТІЛЬКИ якщо це НЕ dance/fan)
-    if not is_standing_zone:
-        seat_val = str(data.get('seat', '-'))
-        seat_parent = writer.add_outline_item("SEAT", 0, parent=root)
-        writer.add_outline_item(seat_val, 0, parent=seat_parent)
+        # 5. SEAT (ТІЛЬКИ якщо це НЕ dance/fan)
+        if not is_standing_zone:
+            seat_val = str(data.get('seat', '-'))
+            seat_parent = writer.add_outline_item("SEAT", 0, parent=root)
+            writer.add_outline_item(seat_val, 0, parent=seat_parent)
 
-    # 6. PRICE:
-    price_val = str(data.get('price', '0'))
-    price_parent = writer.add_outline_item("PRICE:", 0, parent=root)
-    writer.add_outline_item(f"{price_val} RON", 0, parent=price_parent)
+        # 6. PRICE:
+        price_val = str(data.get('price', '0'))
+        price_parent = writer.add_outline_item("PRICE:", 0, parent=root)
+        writer.add_outline_item(f"{price_val} RON", 0, parent=price_parent)
 
-    # 7. НОМЕР КВИТКА (Додано)
-    writer.add_outline_item(ticket_number, 0, parent=root)
+        # 7. НОМЕР КВИТКА (Додано)
+        writer.add_outline_item(ticket_number, 0, parent=root)
 
-    # 8. ДИСКЛЕЙМЕР (Додано)
-    writer.add_outline_item("Doors 16.00 / Show 18.00", 0, parent=root)
+        # 8. ДИСКЛЕЙМЕР (Додано)
+        writer.add_outline_item("Doors 16.00 / Show 18.00", 0, parent=root)
 
-    with open(pdf_path, "wb") as f_out:
-        writer.write(f_out)
+        with open(pdf_path, "wb") as f_out:
+            writer.write(f_out)
+    finally:
+        # Закриваємо reader для звільнення пам'яті
+        if reader is not None:
+            del reader
+        del writer
+        gc.collect()
 
 
 def edit_ticket_pdf(data):
@@ -104,18 +116,29 @@ def edit_ticket_pdf(data):
     if not os.path.exists(template_path):
         return None, f"Помилка: Не знайдено файл {template_path}"
 
-    img = Image.open(template_path).convert("RGB")
-    draw = ImageDraw.Draw(img)
-    width, height = img.size
-    
-    # --- ШРИФТИ ---
+    # Відкриваємо зображення з явним закриттям
+    img = None
+    page2 = None
+    qr_img = None
     try:
-        font_data = ImageFont.truetype("browab_0.ttf", 328)   
-        font_section = ImageFont.truetype("browab_0.ttf", 308) 
-        font_ticket_num = ImageFont.truetype("browab_0.ttf", 260) 
-        font_disclaimer = ImageFont.truetype("browab_0.ttf", 100)     
-    except IOError:
-        font_data = font_section = font_ticket_num = font_disclaimer = ImageFont.load_default()
+        img = Image.open(template_path).convert("RGB")
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
+    
+    # --- ШРИФТИ (з кешуванням) ---
+    def get_font(size):
+        cache_key = f"browab_{size}"
+        if cache_key not in _font_cache:
+            try:
+                _font_cache[cache_key] = ImageFont.truetype("browab_0.ttf", size)
+            except IOError:
+                _font_cache[cache_key] = ImageFont.load_default()
+        return _font_cache[cache_key]
+    
+    font_data = get_font(328)
+    font_section = get_font(308)
+    font_ticket_num = get_font(260)
+    font_disclaimer = get_font(100)
 
     target_orange = hex_to_rgb("#fd9a0c") 
     black_color = (0, 0, 0)
@@ -148,15 +171,19 @@ def edit_ticket_pdf(data):
         draw_text_with_bg(draw, pos_section_seat, str(data['section']), font_section, target_orange)
         draw_text_with_bg(draw, pos_price_seat, str(data['price']), font_data, target_orange)
 
-    # --- QR КОД (без крапок) ---
-    qr_data = ticket_number.replace(".", "")
-    qr_img = generate_qr(qr_data)
-    
-    qr_size = 2120
-    qr_img = qr_img.resize((qr_size, qr_size)) 
-    
-    draw.rectangle((pos_qr[0], pos_qr[1], pos_qr[0] + qr_size, pos_qr[1] + qr_size), fill="white")
-    img.paste(qr_img, pos_qr)
+        # --- QR КОД (без крапок) ---
+        qr_data = ticket_number.replace(".", "")
+        qr_img = generate_qr(qr_data)
+        
+        qr_size = 2120
+        qr_img = qr_img.resize((qr_size, qr_size)) 
+        
+        draw.rectangle((pos_qr[0], pos_qr[1], pos_qr[0] + qr_size, pos_qr[1] + qr_size), fill="white")
+        img.paste(qr_img, pos_qr)
+        
+        # Звільняємо QR зображення з пам'яті
+        del qr_img
+        gc.collect()
 
     # --- РОЗРАХУНОК РОЗМІЩЕННЯ (для переносу на стор. 2) ---
     qr_center_x = pos_qr[0] + (qr_size // 2)
@@ -177,53 +204,75 @@ def edit_ticket_pdf(data):
         lines = disclaimer_text.count('\n') + 1
         disc_bottom_limit = text_disc_y_page1 + (lines * 120)
 
-    # --- OVERFLOW CHECK ---
-    pages = [img]
-    LIMIT_Y = 9000
+        # --- OVERFLOW CHECK ---
+        pages = [img]
+        LIMIT_Y = 9000
 
-    if disc_bottom_limit > LIMIT_Y or num_bottom_limit > LIMIT_Y:
-        print(f"Контент перетнув межу {LIMIT_Y} пікселів! Переносимо номер і текст на сторінку 2.")
-        
-        template_page2_path = os.path.join("templates", "template_page2.png")
-        if os.path.exists(template_page2_path):
-            page2 = Image.open(template_page2_path).convert("RGB")
-        else:
-            page2 = Image.new("RGB", (width, height), "white")
+        if disc_bottom_limit > LIMIT_Y or num_bottom_limit > LIMIT_Y:
+            print(f"Контент перетнув межу {LIMIT_Y} пікселів! Переносимо номер і текст на сторінку 2.")
             
-        draw2 = ImageDraw.Draw(page2)
-        
-        num_y_page2 = 250 
-        num_x_page2 = (width // 2) - (num_w // 2)
-        draw2.text((num_x_page2, num_y_page2), ticket_number, font=font_ticket_num, fill=black_color)
-        
-        disc_y_page2 = num_y_page2 + num_h + 150
-        draw2.text((width // 2, disc_y_page2), disclaimer_text, font=font_disclaimer, fill=black_color, anchor="ma", align="center")
-        
-        pages.append(page2)
-        
-    else:
-        draw_text_with_bg(draw, (text_num_x_page1, text_num_y_page1), ticket_number, font_ticket_num, black_color)
-        draw.text((qr_center_x, text_disc_y_page1), disclaimer_text, font=font_disclaimer, fill=black_color, anchor="ma", align="center")
+            template_page2_path = os.path.join("templates", "template_page2.png")
+            if os.path.exists(template_page2_path):
+                page2 = Image.open(template_page2_path).convert("RGB")
+            else:
+                page2 = Image.new("RGB", (width, height), "white")
+                
+            draw2 = ImageDraw.Draw(page2)
+            
+            num_y_page2 = 250 
+            num_x_page2 = (width // 2) - (num_w // 2)
+            draw2.text((num_x_page2, num_y_page2), ticket_number, font=font_ticket_num, fill=black_color)
+            
+            disc_y_page2 = num_y_page2 + num_h + 150
+            draw2.text((width // 2, disc_y_page2), disclaimer_text, font=font_disclaimer, fill=black_color, anchor="ma", align="center")
+            
+            pages.append(page2)
+            del draw2  # Звільняємо draw2
+            
+        else:
+            draw_text_with_bg(draw, (text_num_x_page1, text_num_y_page1), ticket_number, font_ticket_num, black_color)
+            draw.text((qr_center_x, text_disc_y_page1), disclaimer_text, font=font_disclaimer, fill=black_color, anchor="ma", align="center")
 
-    # --- SAVE ---
-    if not os.path.exists("output"):
-        os.makedirs("output")
+        # Звільняємо draw перед збереженням
+        del draw
+        gc.collect()
+
+        # --- SAVE ---
+        if not os.path.exists("output"):
+            os.makedirs("output")
+            
+        output_filename = f"output/ticket-20251202-3206{random_suffix}.pdf"
         
-    output_filename = f"output/ticket-20251202-3206{random_suffix}.pdf"
-    
-    pages[0].save(
-        output_filename, 
-        "PDF", 
-        resolution=100.0, 
-        save_all=True, 
-        append_images=pages[1:]
-    )
-    
-    # --- ADD METADATA ---
-    try:
-        add_bookmarks(output_filename, data, ticket_number)
-        print(f"Метадані додано: {output_filename}")
+        pages[0].save(
+            output_filename, 
+            "PDF", 
+            resolution=100.0, 
+            save_all=True, 
+            append_images=pages[1:] if len(pages) > 1 else []
+        )
+        
+        # Звільняємо зображення з пам'яті після збереження
+        for page in pages:
+            if page is not None:
+                page.close()
+        del pages
+        gc.collect()
+        
+        # --- ADD METADATA ---
+        try:
+            add_bookmarks(output_filename, data, ticket_number)
+            print(f"Метадані додано: {output_filename}")
+        except Exception as e:
+            print(f"Помилка метаданих: {e}")
+
+        return output_filename, ticket_number
     except Exception as e:
-        print(f"Помилка метаданих: {e}")
-
-    return output_filename, ticket_number
+        # У разі помилки також звільняємо пам'ять
+        if img is not None:
+            img.close()
+        if page2 is not None:
+            page2.close()
+        if qr_img is not None:
+            qr_img.close()
+        gc.collect()
+        raise
