@@ -50,7 +50,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>1</title>
+    <title>Telegram Bot - Квитки</title>
     <style>
         * {
             margin: 0;
@@ -127,6 +127,14 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container">
+        <h1>🎫 Telegram Bot</h1>
+        <div class="status active">● Активний</div>
+        <p>Бот для створення квитків працює у фоновому режимі.</p>
+        <p>Використовуйте Telegram для взаємодії з ботом.</p>
+        <a href="https://t.me/{{ bot_username }}" class="bot-link" target="_blank">
+            Відкрити бота в Telegram
+        </a>
+        <div class="footer">
             <p>Сервер працює на Render</p>
         </div>
     </div>
@@ -196,6 +204,26 @@ def get_sections_keyboard():
     for section in SECTIONS_INFO.keys():
         buttons.append([InlineKeyboardButton(text=section, callback_data=f"sec_{section}")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+# --- ДОПОМІЖНІ ФУНКЦІЇ ---
+
+async def delete_file_after_delay(file_path: str, delay: int = 5):
+    """
+    Видаляє файл через вказану кількість секунд після відправки.
+    
+    Args:
+        file_path: Шлях до файлу для видалення
+        delay: Затримка в секундах перед видаленням (за замовчуванням 5)
+    """
+    try:
+        await asyncio.sleep(delay)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            logging.info(f"Файл видалено: {file_path}")
+        else:
+            logging.warning(f"Файл не знайдено для видалення: {file_path}")
+    except Exception as e:
+        logging.error(f"Помилка при видаленні файлу {file_path}: {e}")
 
 # --- ХЕНДЛЕРИ ---
 
@@ -286,6 +314,9 @@ async def confirm_creation(message: types.Message, state: FSMContext):
             ticket_file = FSInputFile(pdf_path)
             await message.answer_document(ticket_file, caption=f"Готово! Номер: {ticket_num}")
             
+            # Видаляємо файл через 5 секунд після відправки
+            asyncio.create_task(delete_file_after_delay(pdf_path, delay=5))
+            
         else:
             await message.answer("Помилка: Не вдалося створити PDF (повернувся None).")
             
@@ -319,6 +350,8 @@ async def list_tickets(message: types.Message):
     for file_name in files[-5:]:
         file_path = os.path.join(output_dir, file_name)
         await message.answer_document(FSInputFile(file_path))
+        # Видаляємо файл через 5 секунд після відправки
+        asyncio.create_task(delete_file_after_delay(file_path, delay=5))
 
 async def main():
     """Головна функція запуску бота"""
@@ -345,4 +378,3 @@ if __name__ == "__main__":
     except Exception as e:
         logging.error(f"Критична помилка: {e}", exc_info=True)
         raise
-
